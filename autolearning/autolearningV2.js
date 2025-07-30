@@ -2,12 +2,33 @@ const puppeteer = require("puppeteer");
 const cheerio = require("cheerio");
 
 const accounts = [
-  { email: "052193002098", password: "052193002098" },
-  { email: "052191020175", password: "052191020175" },
-  { email: "052185002573", password: "052185002573" },
-  { email: "052201002630", password: "052201002630" },
-  { email: "056097003396", password: "056097003396" },
-  { email: "052088014742", password: "052088014742" },
+  { email: "052099004716", password: "052099004716" },
+  { email: "052201008119", password: "052201008119" },
+  { email: "052203003068", password: "052203003068" },
+  { email: "052096003168", password: "052096003168" },
+  { email: "052200002595", password: "052200002595" },
+  { email: "052093008783", password: "052093008783" },
+  { email: "040203001882", password: "040203001882" },
+  { email: "052204001917", password: "052204001917" },
+  { email: "054206000126", password: "054206000126" },
+  { email: "052202009107", password: "052202009107" },
+  { email: "052204003942", password: "052204003942" },
+  { email: "054204000201", password: "054204000201" },
+  { email: "052093003158", password: "052093003158" },
+  { email: "052306002137", password: "052306002137" },
+  { email: "052303005717", password: "052303005717" },
+  { email: "052097012751", password: "052097012751" },
+  { email: "052196000523", password: "052196000523" },
+  { email: "052300011179", password: "052300011179" },
+  { email: "052096014475", password: "052096014475" },
+  { email: "052095007364", password: "052095007364" },
+  { email: "052099007382", password: "052099007382" },
+  { email: "054204003110", password: "054204003110" },
+  { email: "052303006636", password: "052303006636" },
+  { email: "052186008584", password: "052186008584" },
+  { email: "038186027738", password: "038186027738" },
+  { email: "052304003991", password: "052304003991" },
+  { email: "052097006938", password: "052097006938" },
 ];
 
 // Đối tượng để lưu trữ các trình duyệt
@@ -32,7 +53,7 @@ async function loginAccount(account) {
     console.log(`Đang tải trang cho ${account.email}...`);
     await page.goto("https://hoclythuyetlaixe.eco-tek.com.vn/web/login", {
       waitUntil: "networkidle2",
-      timeout: 360000, // 60 giây
+      timeout: (Math.floor(Math.random() * (10 - 5 + 1)) + 5) * 360000,
     });
 
     // Điền email
@@ -75,12 +96,20 @@ async function loginAccount(account) {
       const linkSubject = await fetchCourseLinks(sessionCookie.value);
       console.log("check linkSubject", linkSubject);
 
+      function shuffleArray(array) {
+        return array
+          .map((item) => ({ item, sort: Math.random() }))
+          .sort((a, b) => a.sort - b.sort)
+          .map(({ item }) => item);
+      }
+
       // Lấy bài học từ từng môn học
       for (const link of linkSubject) {
         const lessons = await fetchLessons(link, sessionCookie.value, link);
+        const shuffledLessons = shuffleArray(lessons);
 
         // Mở trình duyệt và lấy API cho từng bài học
-        for (const lesson of lessons) {
+        for (const lesson of shuffledLessons) {
           const timeLearned = await fetchGetTimeLearned(sessionCookie.value);
           const totalHours = timeLearned.hours + timeLearned.minutes / 60;
           console.log("⏰ Tổng thời gian học (giờ):", totalHours.toFixed(2));
@@ -507,13 +536,16 @@ async function runAllLogins() {
   console.log("Bắt đầu đăng nhập tất cả tài khoản...");
   try {
     // Chạy đăng nhập cho tất cả tài khoản đồng thời
-    const loginPromises = accounts.map((account) =>
-      loginAccount(account)
+    const loginPromises = accounts.map(async (account, index) => {
+      await sleep(
+        index * (Math.floor(Math.random() * (10 - 5 + 1)) + 5) * 60000
+      );
+      await loginAccount(account)
         .then(() => console.log(`✅ Đăng nhập thành công cho ${account.email}`))
         .catch((error) =>
           console.error(`❌ Lỗi đăng nhập cho ${account.email}:`, error.message)
-        )
-    );
+        );
+    });
 
     // Chờ tất cả Promise hoàn tất
     await Promise.all(loginPromises);

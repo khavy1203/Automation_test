@@ -4,7 +4,8 @@ const fs = require('fs');
 const { finished } = require('stream');
 // Danh sách tài khoản
 const accounts = [
-  // { email: '052082013597', password: '052082013597' },
+  { email: '052197010732', password: '052197010732' },
+  { email: "054204003110", password: "054204003110" },
 
 ];
 
