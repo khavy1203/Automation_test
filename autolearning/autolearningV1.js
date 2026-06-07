@@ -4,9 +4,8 @@ const fs = require('fs');
 const { finished } = require('stream');
 // Danh sách tài khoản
 const accounts = [
-  { email: '052197010732', password: '052197010732' },
-  { email: "054204003110", password: "054204003110" },
-
+  { email: '052306014635', password: '052306014635' },
+  
 ];
 
 // Đối tượng để lưu trữ các trình duyệt
@@ -23,7 +22,14 @@ async function loginAccount(account) {
     // Khởi tạo trình duyệt mới
     browser = await puppeteer.launch({
       headless: false,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      executablePath: "C:/Program Files/Google/Chrome/Application/chrome.exe",
+      userDataDir: `E:/TTSHLX_CODE/Automation/.chrome-profiles/${account.email}`,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--no-first-run',
+        '--no-default-browser-check',
+      ],
     });
 
     const page = await browser.newPage();

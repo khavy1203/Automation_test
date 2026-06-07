@@ -7,6 +7,20 @@ const path = require("path");
 const accounts = [
  { email: "052089015493", password: "052089015493" },
   { email: "052088019344", password: "052088019344" },
+  { email: "052098000426", password: "052098000426" },
+  { email: "052186003347", password: "052186003347" },
+  { email: "042078014759", password: "042078014759" },
+  { email: "051198000386", password: "051198000386" },
+  { email: "051095014689", password: "051095014689" },
+  { email: "049095008152", password: "049095008152" },
+  { email: "051200006469", password: "051200006469" },
+  { email: "051094010015", password: "051094010015" },
+  { email: "052208004808", password: "052208004808" },
+  { email: "052201005693", password: "052201005693" },
+  { email: "052200000899", password: "052200000899" },
+  { email: "052098000451", password: "052098000451" },
+  { email: "052205016254", password: "052205016254" },
+  { email: "052195005218", password: "052195005218" },
   { email: "052190021046", password: "052190021046" },
   { email: "052189008919", password: "052189008919" },
   { email: "052196009371", password: "052196009371" },
@@ -118,46 +132,30 @@ async function loginAccount(account) {
           break;
         }
 
-        // Duyệt qua các môn để tìm môn THỰC SỰ còn bài học chưa hoàn thành.
-        // (Một số môn như "mô phỏng" tuy hiển thị chưa hoàn thành nhưng
-        //  không có bài học dạng chuẩn -> fetchLessons trả về [], phải bỏ qua
-        //  để tránh kẹt vòng lặp vô hạn ở môn đầu tiên.)
-        let didLearn = false;
-        for (const subjectLink of linkSubject) {
-          console.log(`Đang kiểm tra môn: ${subjectLink}`);
+        // Học một môn ngẫu nhiên từ danh sách
+        const randomSubjectLink = linkSubject[0];
+        console.log(`Đang học môn: ${randomSubjectLink}`);
 
-          const lessons = await fetchLessons(
-            subjectLink,
+        const lessons = await fetchLessons(
+          randomSubjectLink,
+          sessionCookie.value,
+          randomSubjectLink
+        );
+        const shuffledLessons = shuffleArray(lessons);
+
+        if (shuffledLessons.length > 0) {
+          const lesson = shuffledLessons[0];
+          console.log(`Đang học bài: ${lesson.title}`);
+          await fetchLessonAPIs(
+            lesson.link,
             sessionCookie.value,
-            subjectLink
+            page,
+            browser
           );
-          const shuffledLessons = shuffleArray(lessons);
-
-          if (shuffledLessons.length > 0) {
-            const lesson = shuffledLessons[0];
-            console.log(`Đang học bài: ${lesson.title}`);
-            await fetchLessonAPIs(
-              lesson.link,
-              sessionCookie.value,
-              page,
-              browser
-            );
-            didLearn = true;
-            break; // Học xong 1 bài thì quay lại đầu vòng để cập nhật tiến độ
-          } else {
-            console.log(
-              `Môn học ${subjectLink} không có bài học nào chưa hoàn thành. Chuyển sang môn khác.`
-            );
-          }
-        }
-
-        // Nếu duyệt hết tất cả các môn mà không môn nào còn bài học để học
-        // -> không thể tiến thêm được nữa, thoát để tránh lặp vô hạn.
-        if (!didLearn) {
+        } else {
           console.log(
-            "⚠️ Không còn bài học nào có thể học (các môn còn lại như mô phỏng không có bài học chuẩn). Thoát tài khoản này."
+            `Môn học ${randomSubjectLink} không có bài học nào chưa hoàn thành. Chuyển sang môn khác.`
           );
-          break;
         }
       }
     } else {
