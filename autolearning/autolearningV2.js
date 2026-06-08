@@ -4,17 +4,8 @@ const fs = require("fs");
 const path = require("path");
 
 
-const accounts = [
- { email: "052089015493", password: "052089015493" },
-  { email: "052088019344", password: "052088019344" },
-  { email: "052190021046", password: "052190021046" },
-  { email: "052189008919", password: "052189008919" },
-  { email: "052196009371", password: "052196009371" },
-  { email: "052186014829", password: "052186014829" },
-  { email: "051073009548", password: "051073009548" },
-  { email: "051096014557", password: "051096014557" },
- 
-];
+// File text chứa danh sách account (mỗi dòng 1 CCCD). Đặt cạnh file code này.
+const ACCOUNTS_FILE = path.join(__dirname, "accounts.txt");
 
 const browserSessions = {};
 
@@ -22,24 +13,41 @@ const sleep = (ms) => {
   return new Promise((rs) => setTimeout(rs, ms));
 };
 
+// Đọc danh sách account từ accounts.txt. Mỗi dòng là 1 số CCCD.
+// Bỏ qua dòng trống và dòng chú thích bắt đầu bằng '#'.
+// Đọc lại mỗi lần chạy nên thêm/bớt account trong file là app tự cập nhật.
+async function loadAccounts() {
+  try {
+    const content = await fs.promises.readFile(ACCOUNTS_FILE, "utf8");
+    return content
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line && !line.startsWith("#"))
+      .map((cccd) => ({ email: cccd, password: cccd }));
+  } catch (err) {
+    if (err.code === "ENOENT") {
+      console.error(`❌ Không tìm thấy file danh sách account: ${ACCOUNTS_FILE}`);
+    } else {
+      console.error("❌ Lỗi khi đọc file danh sách account:", err.message);
+    }
+    return [];
+  }
+}
+
 // Serialize ghi file để tránh race-condition khi nhiều account hoàn thành cùng lúc
 let fileWriteLock = Promise.resolve();
 async function removeCompletedAccount(email) {
   fileWriteLock = fileWriteLock.then(async () => {
     try {
-      const filePath = __filename;
-      const content = await fs.promises.readFile(filePath, "utf8");
-      // Khớp đúng dòng: { email: "<cccd>", password: "<cccd>" },
-      const lineRegex = new RegExp(
-        `^[ \\t]*\\{[ \\t]*email:[ \\t]*"${email}",[ \\t]*password:[ \\t]*"${email}"[ \\t]*\\},?[ \\t]*\\r?\\n`,
-        "m"
-      );
-      const newContent = content.replace(lineRegex, "");
-      if (newContent !== content) {
-        await fs.promises.writeFile(filePath, newContent, "utf8");
-        console.log(`🗑️ Đã xoá CCCD ${email} khỏi danh sách accounts (đã hoàn thành toàn bộ).`);
+      const content = await fs.promises.readFile(ACCOUNTS_FILE, "utf8");
+      const lines = content.split(/\r?\n/);
+      // Xoá đúng dòng chứa CCCD này (so khớp sau khi trim, giữ lại comment/dòng khác)
+      const newLines = lines.filter((line) => line.trim() !== email);
+      if (newLines.length !== lines.length) {
+        await fs.promises.writeFile(ACCOUNTS_FILE, newLines.join("\n"), "utf8");
+        console.log(`🗑️ Đã xoá CCCD ${email} khỏi accounts.txt (đã hoàn thành toàn bộ).`);
       } else {
-        console.warn(`⚠️ Không tìm thấy dòng CCCD ${email} để xoá.`);
+        console.warn(`⚠️ Không tìm thấy CCCD ${email} trong accounts.txt để xoá.`);
       }
     } catch (err) {
       console.error(`❌ Lỗi khi xoá CCCD ${email} khỏi file:`, err.message);
@@ -386,6 +394,14 @@ async function fetchLessonAPIs(lessonUrl, session_id, page, browser) {
 
 async function runAllLogins() {
   console.log("Bắt đầu đăng nhập tất cả tài khoản...");
+  const accounts = await loadAccounts();
+  if (accounts.length === 0) {
+    console.warn(
+      "⚠️ Không có account nào trong accounts.txt. Hãy thêm CCCD vào file rồi chạy lại."
+    );
+    return;
+  }
+  console.log(`📋 Đã nạp ${accounts.length} account từ accounts.txt`);
   try {
     const loginPromises = accounts.map(async (account, index) => {
       await sleep(index * 5 * 60000);

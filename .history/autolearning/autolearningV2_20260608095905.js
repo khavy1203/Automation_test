@@ -1,52 +1,60 @@
 const puppeteer = require("puppeteer");
 const cheerio = require("cheerio");
+const fs = require("fs");
+const path = require("path");
 
 
-const accounts = [
-
-  { email: "052205004433", password: "052205004433" },
-  { email: "052069001444", password: "052069001444" },
-  { email: "052074010820", password: "052074010820" },
-  { email: "052097005329", password: "052097005329" },
-  { email: "052087003297", password: "052087003297" },
-  { email: "086096004498", password: "086096004498" },
-  { email: "040200002370", password: "040200002370" },
-  { email: "052195019203", password: "052195019203" },
-  { email: "040099017324", password: "040099017324" },
-  { email: "054301006133", password: "054301006133" },
-  { email: "054189006847", password: "054189006847" },
-  { email: "052204011467", password: "052204011467" },
-  { email: "040200023308", password: "040200023308" },
-  { email: "052083002092", password: "052083002092" },
-  { email: "049093015436", password: "049093015436" },
-  { email: "052193009389", password: "052193009389" },
-  { email: "052099004109", password: "052099004109" },
-  { email: "056196013083", password: "056196013083" },
-  { email: "064098004023", password: "064098004023" },
-  { email: "054205000334", password: "054205000334" },
-  { email: "052093002308", password: "052093002308" },
-  { email: "054205000297", password: "054205000297" },
-  { email: "054095010728", password: "054095010728" },
-  { email: "052205008774", password: "052205008774" },
-  { email: "054205004322", password: "054205004322" },
-  { email: "064204004039", password: "064204004039" },
-  { email: "051205000709", password: "051205000709" },
-  { email: "051098008510", password: "051098008510" },
-  { email: "051184011458", password: "051184011458" },
-  { email: "051206000433", password: "051206000433" },
-  { email: "051197009530", password: "051197009530" },
-  { email: "052098004026", password: "052098004026" },
-  { email: "052304008038", password: "052304008038" },
-  { email: "052096016570", password: "052096016570" },
-  { email: "052206004357", password: "052206004357" },
-
-];
+// File text chứa danh sách account (mỗi dòng 1 CCCD). Đặt cạnh file code này.
+const ACCOUNTS_FILE = path.join(__dirname, "accounts.txt");
 
 const browserSessions = {};
 
 const sleep = (ms) => {
   return new Promise((rs) => setTimeout(rs, ms));
 };
+
+// Đọc danh sách account từ accounts.txt. Mỗi dòng là 1 số CCCD.
+// Bỏ qua dòng trống và dòng chú thích bắt đầu bằng '#'.
+// Đọc lại mỗi lần chạy nên thêm/bớt account trong file là app tự cập nhật.
+async function loadAccounts() {
+  try {
+    const content = await fs.promises.readFile(ACCOUNTS_FILE, "utf8");
+    return content
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line && !line.startsWith("#"))
+      .map((cccd) => ({ email: cccd, password: cccd }));
+  } catch (err) {
+    if (err.code === "ENOENT") {
+      console.error(`❌ Không tìm thấy file danh sách account: ${ACCOUNTS_FILE}`);
+    } else {
+      console.error("❌ Lỗi khi đọc file danh sách account:", err.message);
+    }
+    return [];
+  }
+}
+
+// Serialize ghi file để tránh race-condition khi nhiều account hoàn thành cùng lúc
+let fileWriteLock = Promise.resolve();
+async function removeCompletedAccount(email) {
+  fileWriteLock = fileWriteLock.then(async () => {
+    try {
+      const content = await fs.promises.readFile(ACCOUNTS_FILE, "utf8");
+      const lines = content.split(/\r?\n/);
+      // Xoá đúng dòng chứa CCCD này (so khớp sau khi trim, giữ lại comment/dòng khác)
+      const newLines = lines.filter((line) => line.trim() !== email);
+      if (newLines.length !== lines.length) {
+        await fs.promises.writeFile(ACCOUNTS_FILE, newLines.join("\n"), "utf8");
+        console.log(`🗑️ Đã xoá CCCD ${email} khỏi accounts.txt (đã hoàn thành toàn bộ).`);
+      } else {
+        console.warn(`⚠️ Không tìm thấy CCCD ${email} trong accounts.txt để xoá.`);
+      }
+    } catch (err) {
+      console.error(`❌ Lỗi khi xoá CCCD ${email} khỏi file:`, err.message);
+    }
+  });
+  return fileWriteLock;
+}
 
 async function loginAccount(account) {
   let browser;
@@ -105,6 +113,7 @@ async function loginAccount(account) {
         // Kiểm tra nếu không còn môn nào chưa hoàn thành thì thoát
         if (linkSubject.length === 0) {
           console.log("🎉 Tất cả các môn học đã hoàn thành. Thoát.");
+          await removeCompletedAccount(account.email);
           break;
         }
 
@@ -117,30 +126,46 @@ async function loginAccount(account) {
           break;
         }
 
-        // Học một môn ngẫu nhiên từ danh sách
-        const randomSubjectLink = linkSubject[0];
-        console.log(`Đang học môn: ${randomSubjectLink}`);
+        // Duyệt qua các môn để tìm môn THỰC SỰ còn bài học chưa hoàn thành.
+        // (Một số môn như "mô phỏng" tuy hiển thị chưa hoàn thành nhưng
+        //  không có bài học dạng chuẩn -> fetchLessons trả về [], phải bỏ qua
+        //  để tránh kẹt vòng lặp vô hạn ở môn đầu tiên.)
+        let didLearn = false;
+        for (const subjectLink of linkSubject) {
+          console.log(`Đang kiểm tra môn: ${subjectLink}`);
 
-        const lessons = await fetchLessons(
-          randomSubjectLink,
-          sessionCookie.value,
-          randomSubjectLink
-        );
-        const shuffledLessons = shuffleArray(lessons);
-
-        if (shuffledLessons.length > 0) {
-          const lesson = shuffledLessons[0];
-          console.log(`Đang học bài: ${lesson.title}`);
-          await fetchLessonAPIs(
-            lesson.link,
+          const lessons = await fetchLessons(
+            subjectLink,
             sessionCookie.value,
-            page,
-            browser
+            subjectLink
           );
-        } else {
+          const shuffledLessons = shuffleArray(lessons);
+
+          if (shuffledLessons.length > 0) {
+            const lesson = shuffledLessons[0];
+            console.log(`Đang học bài: ${lesson.title}`);
+            await fetchLessonAPIs(
+              lesson.link,
+              sessionCookie.value,
+              page,
+              browser
+            );
+            didLearn = true;
+            break; // Học xong 1 bài thì quay lại đầu vòng để cập nhật tiến độ
+          } else {
+            console.log(
+              `Môn học ${subjectLink} không có bài học nào chưa hoàn thành. Chuyển sang môn khác.`
+            );
+          }
+        }
+
+        // Nếu duyệt hết tất cả các môn mà không môn nào còn bài học để học
+        // -> không thể tiến thêm được nữa, thoát để tránh lặp vô hạn.
+        if (!didLearn) {
           console.log(
-            `Môn học ${randomSubjectLink} không có bài học nào chưa hoàn thành. Chuyển sang môn khác.`
+            "⚠️ Không còn bài học nào có thể học (các môn còn lại như mô phỏng không có bài học chuẩn). Thoát tài khoản này."
           );
+          break;
         }
       }
     } else {
@@ -369,6 +394,14 @@ async function fetchLessonAPIs(lessonUrl, session_id, page, browser) {
 
 async function runAllLogins() {
   console.log("Bắt đầu đăng nhập tất cả tài khoản...");
+  const accounts = await loadAccounts();
+  if (accounts.length === 0) {
+    console.warn(
+      "⚠️ Không có account nào trong accounts.txt. Hãy thêm CCCD vào file rồi chạy lại."
+    );
+    return;
+  }
+  console.log(`📋 Đã nạp ${accounts.length} account từ accounts.txt`);
   try {
     const loginPromises = accounts.map(async (account, index) => {
       await sleep(index * 5 * 60000);

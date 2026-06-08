@@ -1,0 +1,17 @@
+# Danh sach tai khoan tu dong hoc (autolearningV2.js)
+# Moi dong la 1 so CCCD (email = password = CCCD).
+# Dong trong va dong bat dau bang '#' se bi bo qua.
+# Account hoc xong toan bo se TU DONG bi xoa khoi file nay.
+# Them/bot account chi can sua file nay, app se cap nhat o lan chay ke tiep.
+
+052089015493
+052088019344
+052190021046
+052189008919
+052196009371
+052186014829
+051073009548
+051096014557
+052189017741
+052096002069
+038090025122
